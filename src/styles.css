@@ -1,0 +1,166 @@
+:root {
+  --bg: #0f1115;
+  --panel: #141821;
+  --text: #e5e7eb;
+  --muted: #94a3b8;
+  --primary: #5b9cff;
+  --bubble-user: #1e293b;
+  --bubble-bot: #0b5cff;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica Neue, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+}
+
+/* Layout */
+.app {
+  display: grid;
+  grid-template-rows: 56px 1fr 82px;
+  height: 100%;
+}
+
+/* Top bar */
+.topbar {
+  display: grid;
+  grid-template-columns: 56px 1fr 240px;
+  align-items: center;
+  background: var(--panel);
+  border-bottom: 1px solid #1f2937;
+  padding: 0 8px;
+  gap: 8px;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  padding: 8px;
+  border-radius: 10px;
+}
+.icon-btn:hover { background: rgba(255,255,255,0.06); }
+
+.top-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cid-label { color: var(--muted); font-size: 12px; }
+.cid-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60%;
+  background: #0b1220;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid #1f2937;
+}
+
+.top-right {
+  display: flex;
+  align-items: center;
+  justify-content: end;
+  gap: 8px;
+}
+.profile-select {
+  background: #0b1220;
+  color: var(--text);
+  border: 1px solid #1f2937;
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+/* Chat area */
+.chat-area {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty {
+  margin: auto;
+  text-align: center;
+  color: var(--muted);
+}
+
+.error {
+  margin: 8px auto 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #3b0d0d;
+  border: 1px solid #7f1d1d;
+  color: #fecaca;
+}
+
+/* Burbujas */
+.bubble-row {
+  display: flex;
+  gap: 8px;
+}
+
+.bubble {
+  max-width: min(720px, 80%);
+  padding: 10px 12px;
+  line-height: 1.4;
+  border-radius: 14px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  border: 1px solid #1f2937;
+}
+
+.bubble-user {
+  margin-left: auto;
+  background: var(--bubble-user);
+}
+
+.bubble-bot {
+  margin-right: auto;
+  background: var(--bubble-bot);
+}
+
+/* Composer */
+.composer {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 12px;
+  padding: 12px;
+  background: var(--panel);
+  border-top: 1px solid #1f2937;
+}
+
+.composer-input {
+  resize: none;
+  width: 100%;
+  border-radius: 12px;
+  padding: 12px;
+  background: #0b1220;
+  color: var(--text);
+  border: 1px solid #1f2937;
+  outline: none;
+}
+
+.send-btn {
+  border: none;
+  border-radius: 12px;
+  background: var(--primary);
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
