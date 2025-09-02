@@ -1,6 +1,6 @@
-import type { ApiResponse, Profile } from '../types';
+import type { ApiResponse, Profile, ChatMessage, Role } from '../types';
 
-const DEFAULT_BASE = 'https://debate-api.fly.dev/api/v1';
+const DEFAULT_BASE = 'http://localhost:8000/api/v1';
 
 const BASE = (import.meta.env.VITE_API_BASE_URL as string) || DEFAULT_BASE;
 const SEND_PATH = import.meta.env.VITE_API_SEND_PATH || '/ask';
@@ -10,7 +10,7 @@ const SET_PROFILE_PATH = import.meta.env.VITE_SET_PROFILE_PATH || '/conversation
 const historyUrl = (cid: string, limit = 1000) =>
   join(BASE, `/conversations/${encodeURIComponent(cid)}/history5`) + `?limit=${limit}`;
 
-if (!BASE) {
+if (!import.meta.env.VITE_API_BASE_URL) {
   console.warn('VITE_API_BASE_URL is not set. Using default:', DEFAULT_BASE);
 }
 
@@ -26,9 +26,13 @@ function normalizeProfile(p: any): Profile {
   return { id, name };
 }
 
-function normalizeMsg(m: any): { role: string; message: string } {
-  const roleRaw = m?.role ?? 'assistant';
-  const role = roleRaw === 'bot' ? 'assistant' : roleRaw;
+function normalizeRole(roleRaw: any): Role {
+  const r = String(roleRaw ?? '').toLowerCase();
+  return (r === 'user' ? 'user' : 'assistant') as Role;
+}
+
+function normalizeMsg(m: any): ChatMessage {
+  const role = normalizeRole(m?.role);
   const message = (m?.message ?? m?.content ?? '').toString();
   return { role, message };
 }
@@ -52,7 +56,7 @@ export async function setProfile(profileId: string): Promise<void> {
   const res = await fetch(url, {
     method: 'POST',
     headers: {
-      'accept': 'application/json',
+      accept: 'application/json',
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ profile_id: profileId }),
@@ -89,7 +93,7 @@ export async function sendMessage(
 export async function getHistory(
   conversationId: string,
   limit = 1000
-): Promise<Array<{ role: string; message: string }>> {
+): Promise<ChatMessage[]> {
   const res = await fetch(historyUrl(conversationId, limit), { method: 'GET' });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
@@ -104,7 +108,7 @@ export async function sendAndReloadHistory(
   conversationId: string | null,
   message: string,
   limit = 1000
-): Promise<{ api: ApiResponse; history: Array<{ role: string; message: string }> }> {
+): Promise<{ api: ApiResponse; history: ChatMessage[] }> {
   const api = await sendMessage(conversationId, message);
   const cid = api?.conversation_id as string;
   const history = cid ? await getHistory(cid, limit) : [];
