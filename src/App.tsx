@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { PlusCircle, User as UserIcon, ClipboardCopy } from 'lucide-react';
 import MessageBubble from './components/MessageBubble';
-import { sendMessage, getProfiles, setProfile } from './lib/api';
+import { sendMessage, getProfiles, setProfile, getHistory } from './lib/api';
 import type { ChatMessage, Profile } from './types';
 
 export default function App() {
@@ -17,6 +17,8 @@ export default function App() {
   const [profileId, setProfileId] = useState<string>('');  
 
   const endRef = useRef<HTMLDivElement | null>(null);
+  const reqIdRef = useRef(0);
+
   const scrollToBottom = () => endRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { scrollToBottom(); }, [messages, loading]);
 
@@ -46,13 +48,12 @@ export default function App() {
           (list[0]?.id ?? '');
 
         setProfileId(initial);
-
         if (initial) {
-          try { await setProfile(initial); } catch { /* ignore inicial */ }
+          try { await setProfile(initial); } catch { /* */ }
         }
       } catch (e: any) {
         if (!mounted) return;
-        setProfilesError(e?.message || 'Error cargando perfiles');
+        setProfilesError(e?.message || 'Failed to load profiles.');
 
         const fallback: Profile[] = [
           { id: 'general', name: 'General' },
@@ -60,7 +61,7 @@ export default function App() {
         ];
         setProfiles(fallback);
         setProfileId(fallback[0].id);
-        try { await setProfile(fallback[0].id); } catch { /* ignore */ }
+        try { await setProfile(fallback[0].id); } catch { /*  */ }
       } finally {
         if (mounted) setProfilesLoading(false);
       }
@@ -69,6 +70,21 @@ export default function App() {
     return () => { mounted = false; };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!conversationId) return;
+      try {
+        const full = await getHistory(conversationId, 1000);
+        if (!active) return;
+        setMessages(full);
+      } catch {
+        // ignore
+      }
+    })();
+    return () => { active = false; };
+  }, [conversationId]);
+
   const canSend = useMemo(() => input.trim().length > 0 && !loading, [input, loading]);
 
   async function handleSend() {
@@ -76,20 +92,28 @@ export default function App() {
     setError(null);
     setLoading(true);
 
+    const myReq = ++reqIdRef.current;
+
     const userMsg: ChatMessage = { role: 'user', message: input.trim() };
     const prev = messages;
-    setMessages([...prev, userMsg]);
+    setMessages([...prev, userMsg]); 
     setInput('');
 
     try {
       const res = await sendMessage(conversationId, userMsg.message);
-      setConversationId(res.conversation_id);
-      setMessages(res.message); 
+      if (myReq !== reqIdRef.current) return; 
+
+      const cid = res.conversation_id;
+      setConversationId(cid);
+
+      const full = await getHistory(cid, 1000);
+      if (myReq !== reqIdRef.current) return;
+      setMessages(full);
     } catch (e: any) {
-      setError(e?.message || 'Error al comunicar con la API');
+      setError(e?.message || 'API request failed.');
       setMessages(prev); 
     } finally {
-      setLoading(false);
+      if (myReq === reqIdRef.current) setLoading(false);
     }
   }
 
@@ -114,18 +138,17 @@ export default function App() {
   async function handleProfileChange(id: string) {
     setProfileId(id);
     localStorage.setItem('debate:lastProfileId', id);
-
     try {
       await setProfile(id);
     } catch (e: any) {
-      setError(e?.message || 'No se pudo aplicar el perfil');
+      setError(e?.message || 'Could not apply profile.');
     }
   }
 
   return (
     <div className="app">
       <header className="topbar">
-        <button className="icon-btn" title="Nueva conversación" onClick={handleNewConversation}>
+        <button className="icon-btn" title="New conversation" onClick={handleNewConversation}>
           <PlusCircle size={22} />
         </button>
 
@@ -134,7 +157,7 @@ export default function App() {
           <span className="cid-value">{conversationId ?? '—'}</span>
           <button
             className="icon-btn"
-            title="Copiar Conversation ID"
+            title="Copy Conversation ID"
             onClick={copyConversationId}
             disabled={!conversationId}
           >
@@ -148,10 +171,10 @@ export default function App() {
             className="profile-select"
             value={profileId}
             onChange={(e) => handleProfileChange(e.target.value)}
-            title={profilesLoading ? 'Cargando perfiles…' : 'Seleccionar perfil'}
+            title={profilesLoading ? 'Loading profiles…' : 'Select profile'}
             disabled={profilesLoading || profiles.length === 0}
           >
-            {profilesLoading && <option>Cargando perfiles…</option>}
+            {profilesLoading && <option>Loading profiles…</option>}
             {!profilesLoading && profiles.map(p => (
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
@@ -162,19 +185,20 @@ export default function App() {
       <main className="chat-area">
         {messages.length === 0 && (
           <div className="empty">
-            <h2>¡Inicia un debate!</h2>
-            <p>Elige un perfil y escribe tu primer mensaje abajo.</p>
+            <h2>Start a debate!</h2>
+            <p>Select a profile and type your first message below.</p>
             {profilesError && <p style={{ color: '#fca5a5' }}>{profilesError}</p>}
           </div>
         )}
 
-        {messages.map((m, i) => (
-          <MessageBubble key={i} msg={m} />
-        ))}
+        {messages.map((m, i) => {
+          const txt = (m as any)?.message ?? (m as any)?.content ?? '';
+          return <MessageBubble key={`${i}-${m.role}-${String(txt).slice(0,32)}`} msg={m} />;
+        })}
 
         {loading && (
           <div className="bubble-row">
-            <div className="bubble bubble-bot">… pensando …</div>
+            <div className="bubble bubble-bot">… thinking …</div>
           </div>
         )}
 
@@ -186,14 +210,14 @@ export default function App() {
       <footer className="composer">
         <textarea
           className="composer-input"
-          placeholder="Escribe tu mensaje… (Enter para enviar, Shift+Enter para salto de línea)"
+          placeholder="Type your message… (Enter to send, Shift+Enter for a new line)"
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
           rows={2}
         />
         <button className="send-btn" disabled={!canSend} onClick={handleSend}>
-          Enviar
+          Send
         </button>
       </footer>
     </div>

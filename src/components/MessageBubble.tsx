@@ -1,18 +1,16 @@
-
 import type { ChatMessage } from '../types';
-import cn from 'classnames';
 
-interface Props {
-  msg: ChatMessage;
-}
+type Props = { msg: ChatMessage | { role: string; message?: string; content?: string } };
 
 export default function MessageBubble({ msg }: Props) {
-  const isUser = msg.role === 'user';
+  const role = (msg as any).role === 'bot' ? 'assistant' : (msg as any).role;
+  const text = String((msg as any).message ?? (msg as any).content ?? '');
 
+  const isUser = role === 'user';
   return (
-    <div className={cn('bubble-row', { 'justify-end': isUser })}>
-      <div className={cn('bubble', isUser ? 'bubble-user' : 'bubble-bot')}>
-        {msg.message}
+    <div className="bubble-row">
+      <div className={`bubble ${isUser ? 'bubble-user' : 'bubble-bot'}`}>
+        {text}
       </div>
     </div>
   );
