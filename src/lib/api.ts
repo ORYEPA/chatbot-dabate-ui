@@ -1,13 +1,23 @@
 import type { ApiResponse, Profile } from '../types';
 
-const BASE = import.meta.env.VITE_API_BASE_URL as string;
-const SEND_PATH = import.meta.env.VITE_API_SEND_PATH || '/chat';
+const DEFAULT_BASE = 'https://debate-api.fly.dev/api/v1';
 
+const BASE = (import.meta.env.VITE_API_BASE_URL as string) || DEFAULT_BASE;
+const SEND_PATH = import.meta.env.VITE_API_SEND_PATH || '/ask';
 const PROFILES_PATH = import.meta.env.VITE_PROFILES_PATH || '/profiles';
 const SET_PROFILE_PATH = import.meta.env.VITE_SET_PROFILE_PATH || '/conversations/profile';
 
+const historyUrl = (cid: string, limit = 1000) =>
+  join(BASE, `/conversations/${encodeURIComponent(cid)}/history5`) + `?limit=${limit}`;
+
 if (!BASE) {
-  console.warn('VITE_API_BASE_URL no está definido. Configúralo en .env');
+  console.warn('VITE_API_BASE_URL is not set. Using default:', DEFAULT_BASE);
+}
+
+function join(base: string, path: string) {
+  const b = base.replace(/\/+$/, '');
+  const p = path.startsWith('/') ? path : `/${path}`;
+  return `${b}${p}`;
 }
 
 function normalizeProfile(p: any): Profile {
@@ -16,13 +26,20 @@ function normalizeProfile(p: any): Profile {
   return { id, name };
 }
 
+function normalizeMsg(m: any): { role: string; message: string } {
+  const roleRaw = m?.role ?? 'assistant';
+  const role = roleRaw === 'bot' ? 'assistant' : roleRaw;
+  const message = (m?.message ?? m?.content ?? '').toString();
+  return { role, message };
+}
+
 export async function getProfiles(): Promise<Profile[]> {
-  const url = `${BASE}${PROFILES_PATH}`;
+  const url = join(BASE, PROFILES_PATH);
   const res = await fetch(url, { method: 'GET' });
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`No se pudieron cargar perfiles (${res.status}): ${text || res.statusText}`);
+    throw new Error(`Failed to load profiles (${res.status}): ${text || res.statusText}`);
   }
 
   const raw = await res.json();
@@ -31,7 +48,7 @@ export async function getProfiles(): Promise<Profile[]> {
 }
 
 export async function setProfile(profileId: string): Promise<void> {
-  const url = `${BASE}${SET_PROFILE_PATH}`;
+  const url = join(BASE, SET_PROFILE_PATH);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -43,15 +60,16 @@ export async function setProfile(profileId: string): Promise<void> {
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`No se pudo aplicar el perfil (${res.status}): ${text || res.statusText}`);
+    throw new Error(`Could not apply profile (${res.status}): ${text || res.statusText}`);
   }
 }
+
 
 export async function sendMessage(
   conversationId: string | null,
   message: string
 ): Promise<ApiResponse> {
-  const url = `${BASE}${SEND_PATH}`;
+  const url = join(BASE, SEND_PATH);
 
   const res = await fetch(url, {
     method: 'POST',
@@ -66,4 +84,29 @@ export async function sendMessage(
 
   const data = (await res.json()) as ApiResponse;
   return data;
+}
+
+export async function getHistory(
+  conversationId: string,
+  limit = 1000
+): Promise<Array<{ role: string; message: string }>> {
+  const res = await fetch(historyUrl(conversationId, limit), { method: 'GET' });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Failed to load history (${res.status}): ${text || res.statusText}`);
+  }
+  const data = await res.json();
+  const arr: any[] = Array.isArray(data?.message) ? data.message : [];
+  return arr.map(normalizeMsg);
+}
+
+export async function sendAndReloadHistory(
+  conversationId: string | null,
+  message: string,
+  limit = 1000
+): Promise<{ api: ApiResponse; history: Array<{ role: string; message: string }> }> {
+  const api = await sendMessage(conversationId, message);
+  const cid = api?.conversation_id as string;
+  const history = cid ? await getHistory(cid, limit) : [];
+  return { api, history };
 }
